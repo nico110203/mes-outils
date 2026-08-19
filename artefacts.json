@@ -6,4 +6,12 @@
     "tag": "react",
     "date": "2026-04-09"
 }
+
+    {
+    "titre": "Crawler SEO → JSON",
+    "description": "Entre l'URL racine d'un site : le crawler explore toutes les pages et exporte le contenu complet en JSON.",
+    "fichier": "seo-crawler.html",
+    "tag": "seo",
+    "date": "2026-08-19"
+}
 ]
