@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compresseur d'images</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e8eaed;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --accent-hover: #3d78e8;
+    --green: #3ecf8e;
+    --red: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 16px;
+    min-height: 100vh;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--panel);
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone.dragover { border-color: var(--accent); background: var(--panel-2); }
+  .dropzone p { margin: 4px 0; color: var(--muted); }
+  .dropzone strong { color: var(--text); }
+  input[type="file"] { display: none; }
+
+  .settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-top: 16px;
+  }
+  .settings label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+  .settings select, .settings input[type="range"] { accent-color: var(--accent); }
+  select {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .quality-row { display: flex; align-items: center; gap: 10px; }
+  .quality-val { font-variant-numeric: tabular-nums; color: var(--text); font-size: 13px; min-width: 34px; }
+
+  .actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  button {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, opacity .15s;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: #262b35; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .summary { color: var(--muted); font-size: 13px; margin-top: 14px; }
+  .summary strong { color: var(--green); }
+
+  .list { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .item img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: #000; flex-shrink: 0; }
+  .item-info { flex: 1; min-width: 0; }
+  .item-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .item-meta .saved { color: var(--green); }
+  .item-status { font-size: 12px; color: var(--muted); flex-shrink: 0; min-width: 70px; text-align: right; }
+  .item-status.done { color: var(--green); }
+  .item-status.error { color: var(--red); }
+  .item-remove {
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px;
+    padding: 4px 8px; flex-shrink: 0;
+  }
+  .item-remove:hover { color: var(--red); }
+
+  .note { font-size: 12px; color: var(--muted); margin-top: 24px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Compresseur d'images</h1>
+  <p class="subtitle">Compression qualité maximale, suppression des données EXIF, renommage automatique. Tout se passe dans votre navigateur — aucune image n'est envoyée où que ce soit.</p>
+
+  <div class="dropzone" id="dropzone">
+    <p><strong>Cliquez pour choisir des images</strong> ou glissez-déposez-les ici</p>
+    <p>JPEG, PNG, WebP — plusieurs fichiers acceptés</p>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+  </div>
+
+  <div class="settings">
+    <label>
+      Format de sortie
+      <select id="formatSelect">
+        <option value="auto" selected>Auto (conserve le format d'origine)</option>
+        <option value="image/jpeg">Forcer en JPEG</option>
+        <option value="image/webp">Forcer en WebP</option>
+        <option value="image/png">Forcer en PNG (sans perte)</option>
+      </select>
+    </label>
+    <label>
+      Qualité (JPEG / WebP)
+      <span class="quality-row">
+        <input type="range" id="qualitySlider" min="0.7" max="1" step="0.01" value="0.95">
+        <span class="quality-val" id="qualityVal">0.95</span>
+      </span>
+    </label>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="compressBtn" disabled>Compresser</button>
+    <button class="btn-secondary" id="downloadBtn" disabled>Télécharger</button>
+    <button class="btn-secondary" id="clearBtn" disabled>Vider la liste</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="list" id="list"></div>
+
+  <p class="note">
+    Le format PNG est compressé sans perte réelle (pixels identiques). Pour JPEG/WebP, une qualité ≥ 0.92 est
+    visuellement indiscernable de l'original tout en réduisant nettement la taille du fichier ; c'est le meilleur
+    compromis disponible dans un navigateur, un JPEG "sans aucune perte" n'existant pas techniquement pour ce format.
+    Le recodage via canvas retire automatiquement toutes les métadonnées EXIF (GPS, appareil photo, date, etc.).
+    Le téléchargement se fait fichier par fichier — si votre navigateur bloque les téléchargements multiples,
+    autorisez les pop-ups/téléchargements pour cette page.
+  </p>
+</div>
+
+<script>
+(function () {
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const list = document.getElementById('list');
+  const compressBtn = document.getElementById('compressBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const summary = document.getElementById('summary');
+  const formatSelect = document.getElementById('formatSelect');
+  const qualitySlider = document.getElementById('qualitySlider');
+  const qualityVal = document.getElementById('qualityVal');
+
+  let items = []; // { id, file, originalUrl, thumbUrl, status, blob, outName, outSize }
+
+  qualitySlider.addEventListener('input', () => {
+    qualityVal.textContent = qualitySlider.value;
+  });
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+    fileInput.value = '';
+  });
+
+  function handleFiles(fileList) {
+    const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+    files.forEach(file => {
+      const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random());
+      const url = URL.createObjectURL(file);
+      items.push({
+        id, file, originalUrl: url, status: 'pending',
+        blob: null, outName: null, outSize: null
+      });
+    });
+    renderList();
+    updateButtons();
+  }
+
+  function randomDigits(n) {
+    let s = '';
+    for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10);
+    return s;
+  }
+
+  function extForMime(mime) {
+    if (mime === 'image/jpeg') return 'jpg';
+    if (mime === 'image/png') return 'png';
+    if (mime === 'image/webp') return 'webp';
+    return 'jpg';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' o';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' Mo';
+  }
+
+  function renderList() {
+    list.innerHTML = '';
+    items.forEach(item => {
+      const el = document.createElement('div');
+      el.className = 'item';
+
+      const img = document.createElement('img');
+      img.src = item.originalUrl;
+      el.appendChild(img);
+
+      const info = document.createElement('div');
+      info.className = 'item-info';
+      const name = document.createElement('div');
+      name.className = 'item-name';
+      name.textContent = item.outName || item.file.name;
+      const meta = document.createElement('div');
+      meta.className = 'item-meta';
+      if (item.outSize != null) {
+        const savedPct = Math.max(0, Math.round((1 - item.outSize / item.file.size) * 100));
+        meta.innerHTML = `${formatBytes(item.file.size)} → ${formatBytes(item.outSize)} <span class="saved">(-${savedPct}%)</span>`;
+      } else {
+        meta.textContent = formatBytes(item.file.size);
+      }
+      info.appendChild(name);
+      info.appendChild(meta);
+      el.appendChild(info);
+
+      const status = document.createElement('div');
+      status.className = 'item-status' + (item.status === 'done' ? ' done' : item.status === 'error' ? ' error' : '');
+      status.textContent = item.status === 'pending' ? 'en attente'
+        : item.status === 'processing' ? 'traitement…'
+        : item.status === 'done' ? 'prêt'
+        : 'erreur';
+      el.appendChild(status);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'item-remove';
+      removeBtn.textContent = '✕';
+      removeBtn.title = 'Retirer';
+      removeBtn.addEventListener('click', () => {
+        items = items.filter(i => i.id !== item.id);
+        renderList();
+        updateButtons();
+      });
+      el.appendChild(removeBtn);
+
+      list.appendChild(el);
+    });
+    updateSummary();
+  }
+
+  function updateSummary() {
+    if (items.length === 0) { summary.textContent = ''; return; }
+    const done = items.filter(i => i.status === 'done');
+    if (done.length === 0) {
+      summary.textContent = `${items.length} image(s) en file d'attente.`;
+      return;
+    }
+    const origTotal = done.reduce((s, i) => s + i.file.size, 0);
+    const newTotal = done.reduce((s, i) => s + i.outSize, 0);
+    const pct = origTotal > 0 ? Math.round((1 - newTotal / origTotal) * 100) : 0;
+    summary.innerHTML = `${done.length}/${items.length} compressée(s) — ${formatBytes(origTotal)} → ${formatBytes(newTotal)} (<strong>-${pct}%</strong>)`;
+  }
+
+  function updateButtons() {
+    compressBtn.disabled = items.length === 0;
+    clearBtn.disabled = items.length === 0;
+    downloadBtn.disabled = !items.some(i => i.status === 'done');
+  }
+
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  async function compressOne(item, outFormat, quality) {
+    item.status = 'processing';
+    renderList();
+    try {
+      const img = await loadImage(item.file);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      let mime = outFormat;
+      if (mime === 'auto') {
+        mime = item.file.type === 'image/png' ? 'image/png'
+          : item.file.type === 'image/webp' ? 'image/webp'
+          : 'image/jpeg';
+      }
+      const useQuality = mime === 'image/png' ? undefined : quality;
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), mime, useQuality);
+      });
+
+      item.blob = blob;
+      item.outSize = blob.size;
+      item.outName = `image${randomDigits(8)}.${extForMime(mime)}`;
+      item.status = 'done';
+    } catch (err) {
+      console.error(err);
+      item.status = 'error';
+    }
+    renderList();
+    updateButtons();
+  }
+
+  compressBtn.addEventListener('click', async () => {
+    compressBtn.disabled = true;
+    const outFormat = formatSelect.value;
+    const quality = parseFloat(qualitySlider.value);
+    for (const item of items) {
+      await compressOne(item, outFormat, quality);
+    }
+    compressBtn.disabled = false;
+  });
+
+  clearBtn.addEventListener('click', () => {
+    items.forEach(i => URL.revokeObjectURL(i.originalUrl));
+    items = [];
+    renderList();
+    updateButtons();
+  });
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  downloadBtn.addEventListener('click', async () => {
+    downloadBtn.disabled = true;
+    const done = items.filter(i => i.status === 'done');
+    for (const item of done) {
+      const url = URL.createObjectURL(item.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = item.outName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      await sleep(400);
+    }
+    downloadBtn.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>
