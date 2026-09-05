@@ -11,5 +11,12 @@
         "fichier": "pdf-to-markdown.html",
         "tag": "react",
         "date": "2026-04-09"
+    },
+    {
+        "titre": "Compress and EXIF remover",
+        "description": "Optimise les images",
+        "fichier": "compresseurimages.html",
+        "tag": "seo",
+        "date": "2026-08-19"
     }
 ]
